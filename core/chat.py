@@ -1,54 +1,56 @@
-import requests, json
-from collections import deque
-from datetime import datetime
-from config import API_URL, MODEL, MAX_TOKENS, REQUEST_TIMEOUT, LOG_FILE, GATILHOS, HISTORY_MAX_MESSAGES
-from db.memory import save_vector_memory
-from embeddings.generator import gerar_embedding
+import ollama
+from ollama_assistant.embeddings.generator import gerar_embedding
+from ollama_assistant.db.memory import save_vector_memory, search_memory
 
-history = deque(maxlen=HISTORY_MAX_MESSAGES)
+def montar_prompt(contexto, user_text):
+    return f"""
+Você é Makesluke, um assistente técnico com memória semântica.
 
-def log(msg):
-    ts = datetime.now().astimezone().isoformat()
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{ts} {msg}\n")
+Memórias relevantes do usuário:
+{contexto}
 
-def ask(user_text):
-    history.append({"role": "user", "content": user_text})
-    payload = {"model": MODEL, "messages": list(history), "max_tokens": MAX_TOKENS, "temperature": 0.2, "stream": True}
-    try:
-        r = requests.post(API_URL, json=payload, timeout=REQUEST_TIMEOUT, stream=True)
-        r.raise_for_status()
-        print("Maks Luke:", end=" ", flush=True)
-        assistant_text = ""
-        for line in r.iter_lines():
-            if not line: continue
-            try: data = json.loads(line.decode())
-            except: continue
-            if "message" in data and "content" in data["message"]:
-                chunk = data["message"]["content"]
-                assistant_text += chunk
-                print(chunk, end="", flush=True)
-            if data.get("done"):
-                print(); break
-        assistant_text = assistant_text.strip() or "[sem resposta]"
-        history.append({"role": "assistant", "content": assistant_text})
-        log(f"USER: {user_text}")
-        log(f"ASSISTANT: {assistant_text[:1000].replace(chr(10),' ')}")
-        return assistant_text
-    except Exception as e:
-        err = f"Erro ao contactar o serviço local: {e}"
-        log(err); print(err)
-        return err
+Usuário disse:
+{user_text}
+
+Responda levando em conta as memórias acima.
+"""
 
 def interactive():
-    print("Maks Luke pronto aqui. Digite sua pergunta: (digite 'sair' para encerrar)")
+    print("Makesluke pronto. Digite sua pergunta:")
+
     while True:
-        try: u = input("Você: ").strip()
-        except (KeyboardInterrupt, EOFError): print("\nEncerrando."); break
-        if not u: continue
-        if u.lower() in ("sair", "exit", "quit"): break
-        if any(g in u.lower() for g in GATILHOS):
-            embedding = gerar_embedding(u)
+        u = input("Você: ")
+
+        if u.lower() == "sair":
+            break
+
+        # 1. gerar embedding da entrada
+        embedding = gerar_embedding(u)
+
+        # 2. salvar memória se o usuário pedir
+        if "salve" in u.lower() or "guardar" in u.lower():
             save_vector_memory("romeu", u, embedding)
-            print("✅ Memória salva com embedding!")
-        ask(u)
+            print("Memória salva!")
+            continue
+
+        # 3. buscar memórias relevantes
+        memorias = search_memory("romeu", embedding)
+
+        contexto = ""
+        for m in memorias:
+            contexto += f"- {m['content']}\n"
+
+        # 4. montar prompt final
+        prompt_final = montar_prompt(contexto, u)
+
+        # 5. chamar o modelo principal
+        print("Makesluke: ", end="", flush=True)
+        for chunk in ollama.generate(
+            model="Makesluke",
+            prompt=prompt_final,
+            stream=True
+        ):    
+            if "response" in chunk:
+                print(chunk["response"], end="", flush=True)
+
+        print()
