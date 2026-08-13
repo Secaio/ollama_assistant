@@ -1,19 +1,9 @@
 import ollama
+from ollama_assistant.db.memory import *
 from ollama_assistant.embeddings.generator import gerar_embedding
-from ollama_assistant.db.memory import save_vector_memory, search_memory
-
-def montar_prompt(contexto, user_text):
-    return f"""
-Você é Makesluke, um assistente técnico com memória semântica.
-
-Memórias relevantes do usuário:
-{contexto}
-
-Usuário disse:
-{user_text}
-
-Responda levando em conta as memórias acima.
-"""
+from ollama_assistant.core.prompts import montar_prompt
+from ollama_assistant.core.utils import *
+from ollama_assistant.config import GATILHOS
 
 def interactive():
     print("Makesluke pronto. Digite sua pergunta:")
@@ -28,22 +18,39 @@ def interactive():
         embedding = gerar_embedding(u)
 
         # 2. salvar memória se o usuário pedir
-        if "salve" in u.lower() or "guardar" in u.lower():
-            save_vector_memory("romeu", u, embedding)
-            print("Memória salva!")
+        if any(g in u.lower() for g in GATILHOS) and "#" in u:
+            save_vector_memory_command("romeu", u, embedding)
             continue
 
-        # 3. buscar memórias relevantes
+        # 3. editar memória por texto
+        if "editar" in u.lower() and "#" in u:
+            parsed = parse_edit_memory_command(u) #jeito antigo funcionava
+            if parsed:
+                editar_memoria_por_texto(parsed)
+            else:
+                print("⚠️ Comando inválido para editar memória.")
+            continue                
+        
+        # 4. excluir memória por texto
+        if "excluir" in u.lower() and "#" in u:
+            parsed = parse_delete_memory_command(u)
+            if parsed:
+                excluir_memoria_por_texto(parsed)
+            else:
+                print("⚠️ Comando inválido para excluir memória.")
+            continue
+        
+        # 5. buscar memórias relevantes
         memorias = search_memory("romeu", embedding)
 
         contexto = ""
         for m in memorias:
             contexto += f"- {m['content']}\n"
 
-        # 4. montar prompt final
+        # 6. montar prompt final
         prompt_final = montar_prompt(contexto, u)
 
-        # 5. chamar o modelo principal
+        # 7. chamar o modelo principal
         print("Makesluke: ", end="", flush=True)
         for chunk in ollama.generate(
             model="Makesluke",

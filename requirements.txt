@@ -1,0 +1,15 @@
+ollama
+psycopg2-binary
+numpy
+python-dotenv
+whisper
+
+# ollama — para gerar embeddings e respostas do modelo Makesluke
+
+# psycopg2-binary — driver PostgreSQL para salvar/buscar memórias
+
+# numpy — necessário para embeddings e manipulação vetorial
+
+# python-dotenv — carregar configs do .env (DB, tokens, etc.)
+
+# whisper — para comandos por voz (edição, salvar, excluir memória)

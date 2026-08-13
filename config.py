@@ -9,4 +9,4 @@ LOG_FILE = os.path.join(BASE_DIR, "assistant.log")
 HISTORY_MAX_MESSAGES = 40
 MAX_TOKENS = 512
 REQUEST_TIMEOUT = 120
-GATILHOS = ["salve","salvar","guarde", "guardar", "lembre","lembrar", "memorize"]
+GATILHOS = ["salve","salvar","guarde", "guardar", "lembre","lembrar", "memorize", "memorizar"]
