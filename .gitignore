@@ -1,0 +1,105 @@
+# ============================
+#  PYTHON
+# ============================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.pkl
+*.so
+
+# Virtual environments
+venv/
+.env
+.env.*
+.venv/
+ENV/
+env/
+pip-wheel-metadata/
+
+# Build / distribution
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ============================
+#  OLLAMA
+# ============================
+# Model cache
+~/.ollama/
+ollama_models/
+ollama_cache/
+*.bin
+
+# ============================
+#  WHISPER / ÁUDIO
+# ============================
+# Raw audio recordings
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+
+# Whisper temporary files
+whisper_cache/
+whisper_temp/
+
+# ============================
+#  LOGS
+# ============================
+*.log
+logs/
+assistant.log
+
+# ============================
+#  DATABASE / PGVECTOR
+# ============================
+*.sqlite3
+*.db
+*.sql.tmp
+pgvector_cache/
+
+# ============================
+#  SYSTEM / OS
+# ============================
+.DS_Store
+Thumbs.db
+
+# ============================
+#  EDITORS / IDEs
+# ============================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ============================
+#  PROJECT SPECIFIC
+# ============================
+# Local configs
+config_local.py
+secrets.json
+
+# Audio commands from Makesluke
+audio_commands/
+voice_input/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# ============================
+#  NODE / FRONTEND (se usar)
+# ============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
