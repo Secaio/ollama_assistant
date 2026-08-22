@@ -5,9 +5,9 @@ import os
 def connect_db():
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "localhost"),
-        database=os.getenv("DB_NAME", "makesluke_memory"),
-        user=os.getenv("DB_USER", "makesluke"),
-        password=os.getenv("DB_PASS", "bibi"),
+        database=os.getenv("DB_NAME", "YOUR DATA BASE"),
+        user=os.getenv("DB_USER", "******"),
+        password=os.getenv("DB_PASS", "******"),
         port=os.getenv("DB_PORT", 5432)
     )
 
