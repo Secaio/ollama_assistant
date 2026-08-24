@@ -3,6 +3,7 @@ psycopg2-binary
 numpy
 python-dotenv
 whisper
+mcp==2.0.0
 
 # ollama — para gerar embeddings e respostas do modelo Makesluke
 
@@ -13,3 +14,5 @@ whisper
 # python-dotenv — carregar configs do .env (DB, tokens, etc.)
 
 # whisper — para comandos por voz (edição, salvar, excluir memória)
+
+# MCP Server

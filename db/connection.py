@@ -8,7 +8,7 @@ def connect_db():
         database=os.getenv("DB_NAME", "makesluke_memory"),
         user=os.getenv("DB_USER", "makesluke"),
         password=os.getenv("DB_PASS", "bibi"),
-        port=os.getenv("DB_PORT", 5432)
+        port=os.getenv("DB_PORT", "5432")
     )
 
 db = connect_db()
