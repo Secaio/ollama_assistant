@@ -100,7 +100,7 @@ def search_memory(user_id, embedding, categorias=None):
         query += " AND category = ANY(%s)"
         params.append(categorias)
 
-    query += " ORDER BY importance DESC, distancia ASC LIMIT 10"
+    query += " ORDER BY distancia ASC, importance DESC  LIMIT 100"
 
     cursor.execute(query, params)
     return cursor.fetchall()

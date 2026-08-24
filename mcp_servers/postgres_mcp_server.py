@@ -1,17 +1,13 @@
 import logging
-from typing import Optional
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 from mcp.server.mcpserver import MCPServer
+from ollama_assistant.db.connection import db
+from ollama_assistant.embeddings.generator import gerar_embedding
+import sys
 
-from db.connection import db
-
-
-# ============================================================
-# CONFIGURAÇÃO
-# ============================================================
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 mcp = MCPServer(
     name="Makesluke PostgreSQL",
@@ -19,23 +15,11 @@ mcp = MCPServer(
 )
 
 
-# ============================================================
-# CONEXÃO
-# ============================================================
-
-def verificar_conexao():
-    """
-    Verifica se a conexão PostgreSQL ainda está aberta.
-    """
+def get_connection():
     if db.closed:
-        raise RuntimeError("A conexão com PostgreSQL está fechada.")
-
+        raise RuntimeError("Conexão PostgreSQL fechada.")
     return db
 
-
-# ============================================================
-# LISTAR MEMÓRIAS
-# ============================================================
 
 @mcp.tool()
 def listar_memorias(
@@ -43,14 +27,10 @@ def listar_memorias(
     limite: int = 20
 ) -> list[dict]:
     """
-    Lista as memórias do usuário.
-
-    Use esta ferramenta quando precisar consultar
-    as memórias armazenadas no Makesluke.
+    Lista as memórias armazenadas no PostgreSQL.
     """
 
-    conn = verificar_conexao()
-
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
@@ -74,8 +54,6 @@ def listar_memorias(
 
     rows = cursor.fetchall()
 
-    cursor.close()
-
     columns = [
         "id",
         "user_id",
@@ -87,15 +65,13 @@ def listar_memorias(
         "expiration_date"
     ]
 
+    cursor.close()
+
     return [
         dict(zip(columns, row))
         for row in rows
     ]
 
-
-# ============================================================
-# BUSCAR MEMÓRIA POR TEXTO
-# ============================================================
 
 @mcp.tool()
 def buscar_memoria(
@@ -103,14 +79,10 @@ def buscar_memoria(
     user_id: str = "romeu"
 ) -> list[dict]:
     """
-    Busca memórias pelo conteúdo textual.
-
-    Use esta ferramenta quando precisar encontrar
-    uma memória específica pelo texto.
+    Busca memórias pelo conteúdo usando correspondência textual.
     """
 
-    conn = verificar_conexao()
-
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
@@ -126,18 +98,13 @@ def buscar_memoria(
         FROM memory
         WHERE user_id = %s
           AND content ILIKE %s
-        ORDER BY importance DESC, created_at DESC
+        ORDER BY importance DESC
         LIMIT 20
         """,
-        (
-            user_id,
-            f"%{texto}%"
-        )
+        (user_id, f"%{texto}%")
     )
 
     rows = cursor.fetchall()
-
-    cursor.close()
 
     columns = [
         "id",
@@ -149,26 +116,96 @@ def buscar_memoria(
         "expiration_date"
     ]
 
+    cursor.close()
+
     return [
         dict(zip(columns, row))
         for row in rows
     ]
 
 
-# ============================================================
-# OBTER UMA MEMÓRIA
-# ============================================================
+@mcp.tool()
+def buscar_memoria_semantica(
+    query: str,
+    user_id: str = "romeu",
+    limite: int = 10
+) -> list[dict]:
+    """
+    Busca memórias semanticamente usando embeddings e pgvector.
+    """
+
+    embedding = gerar_embedding(query)
+
+    if not embedding:
+        return [{
+            "success": False,
+            "error": "Não foi possível gerar o embedding da consulta."
+        }]
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            id,
+            user_id,
+            content,
+            category,
+            importance,
+            confidence,
+            created_at,
+            expiration_date,
+            embedding <-> %s::vector AS distancia
+        FROM memory
+        WHERE user_id = %s
+          AND embedding IS NOT NULL
+          AND (
+              expiration_date IS NULL
+              OR expiration_date > NOW()
+          )
+        ORDER BY embedding <-> %s::vector
+        LIMIT %s
+        """,
+        (
+            embedding,
+            user_id,
+            embedding,
+            limite
+        )
+    )
+
+    rows = cursor.fetchall()
+
+    columns = [
+        "id",
+        "user_id",
+        "content",
+        "category",
+        "importance",
+        "confidence",
+        "created_at",
+        "expiration_date",
+        "distancia"
+    ]
+
+    cursor.close()
+
+    return [
+        dict(zip(columns, row))
+        for row in rows
+    ]
+
 
 @mcp.tool()
 def obter_memoria(
     memory_id: int
-) -> Optional[dict]:
+) -> dict | None:
     """
-    Obtém uma memória específica pelo ID.
+    Retorna uma memória pelo ID.
     """
 
-    conn = verificar_conexao()
-
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
@@ -190,11 +227,6 @@ def obter_memoria(
 
     row = cursor.fetchone()
 
-    cursor.close()
-
-    if not row:
-        return None
-
     columns = [
         "id",
         "user_id",
@@ -206,32 +238,35 @@ def obter_memoria(
         "expiration_date"
     ]
 
+    cursor.close()
+
+    if not row:
+        return None
+
     return dict(zip(columns, row))
 
-
-# ============================================================
-# SALVAR MEMÓRIA
-# ============================================================
 
 @mcp.tool()
 def salvar_memoria(
     content: str,
     user_id: str = "romeu",
-    category: Optional[str] = None,
+    category: str | None = None,
     importance: int = 5,
     confidence: float = 1.0
 ) -> dict:
     """
-    Salva uma nova memória no PostgreSQL.
-
-    IMPORTANTE:
-    Esta ferramenta não gera embedding.
-    O embedding continuará sendo responsabilidade
-    do Makesluke.
+    Salva uma nova memória e gera automaticamente seu embedding.
     """
 
-    conn = verificar_conexao()
+    embedding = gerar_embedding(content)
 
+    if not embedding:
+        return {
+            "success": False,
+            "message": "Não foi possível gerar o embedding da memória."
+        }
+
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
@@ -242,9 +277,10 @@ def salvar_memoria(
             content,
             category,
             importance,
-            confidence
+            confidence,
+            embedding
         )
-        VALUES (%s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s)
         RETURNING id
         """,
         (
@@ -252,54 +288,55 @@ def salvar_memoria(
             content,
             category,
             importance,
-            confidence
+            confidence,
+            embedding
         )
     )
 
     memory_id = cursor.fetchone()[0]
 
     conn.commit()
-
     cursor.close()
-
-    logger.info(
-        "Memória salva. ID=%s",
-        memory_id
-    )
 
     return {
         "success": True,
         "id": memory_id,
-        "message": "Memória salva com sucesso."
+        "message": "Memória salva com sucesso e embedding gerado."
     }
 
-
-# ============================================================
-# EDITAR MEMÓRIA
-# ============================================================
 
 @mcp.tool()
 def editar_memoria(
     memory_id: int,
-    content: Optional[str] = None,
-    category: Optional[str] = None,
-    importance: Optional[int] = None,
-    confidence: Optional[float] = None
+    content: str | None = None,
+    category: str | None = None,
+    importance: int | None = None,
+    confidence: float | None = None
 ) -> dict:
     """
     Edita uma memória existente.
 
-    Somente os campos enviados serão alterados.
+    Se o conteúdo for alterado, um novo embedding será gerado automaticamente.
     """
-
-    conn = verificar_conexao()
 
     campos = []
     valores = []
 
     if content is not None:
+
+        embedding = gerar_embedding(content)
+
+        if not embedding:
+            return {
+                "success": False,
+                "message": "Não foi possível gerar o novo embedding."
+            }
+
         campos.append("content = %s")
         valores.append(content)
+
+        campos.append("embedding = %s")
+        valores.append(embedding)
 
     if category is not None:
         campos.append("category = %s")
@@ -316,8 +353,11 @@ def editar_memoria(
     if not campos:
         return {
             "success": False,
-            "message": "Nenhum campo foi informado para alteração."
+            "message": "Nenhum campo para atualizar."
         }
+
+    conn = get_connection()
+    cursor = conn.cursor()
 
     valores.append(memory_id)
 
@@ -327,8 +367,6 @@ def editar_memoria(
         WHERE id = %s
     """
 
-    cursor = conn.cursor()
-
     cursor.execute(sql, valores)
 
     if cursor.rowcount == 0:
@@ -336,17 +374,11 @@ def editar_memoria(
 
         return {
             "success": False,
-            "message": f"Memória {memory_id} não encontrada."
+            "message": "Memória não encontrada."
         }
 
     conn.commit()
-
     cursor.close()
-
-    logger.info(
-        "Memória %s atualizada.",
-        memory_id
-    )
 
     return {
         "success": True,
@@ -354,10 +386,6 @@ def editar_memoria(
         "message": "Memória atualizada com sucesso."
     }
 
-
-# ============================================================
-# EXCLUIR MEMÓRIA
-# ============================================================
 
 @mcp.tool()
 def excluir_memoria(
@@ -367,8 +395,7 @@ def excluir_memoria(
     Exclui uma memória pelo ID.
     """
 
-    conn = verificar_conexao()
-
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
@@ -384,17 +411,11 @@ def excluir_memoria(
 
         return {
             "success": False,
-            "message": f"Memória {memory_id} não encontrada."
+            "message": "Memória não encontrada."
         }
 
     conn.commit()
-
     cursor.close()
-
-    logger.info(
-        "Memória %s excluída.",
-        memory_id
-    )
 
     return {
         "success": True,
@@ -403,57 +424,91 @@ def excluir_memoria(
     }
 
 
-# ============================================================
-# ESTATÍSTICAS
-# ============================================================
-
 @mcp.tool()
 def estatisticas_memoria(
     user_id: str = "romeu"
 ) -> dict:
     """
-    Retorna estatísticas das memórias do usuário.
+    Retorna estatísticas das memórias.
     """
 
-    conn = verificar_conexao()
-
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
         """
         SELECT
-            COUNT(*) AS total,
+            COUNT(*),
             COUNT(*) FILTER (
                 WHERE expiration_date IS NULL
                    OR expiration_date > NOW()
-            ) AS ativas,
+            ),
             COUNT(*) FILTER (
                 WHERE expiration_date IS NOT NULL
                   AND expiration_date <= NOW()
-            ) AS expiradas
+            )
         FROM memory
         WHERE user_id = %s
         """,
         (user_id,)
     )
 
-    row = cursor.fetchone()
+    total, ativas, expiradas = cursor.fetchone()
 
     cursor.close()
 
     return {
         "user_id": user_id,
-        "total": row[0],
-        "ativas": row[1],
-        "expiradas": row[2]
+        "total": total,
+        "ativas": ativas,
+        "expiradas": expiradas
+    }
+
+@mcp.tool()
+def maior_id_memoria(user_id: str = "romeu") -> dict:
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT MAX(id)
+        FROM memory
+        WHERE user_id = %s
+        """,
+        (user_id,)
+    )
+
+    maior_id = cursor.fetchone()[0]
+    cursor.close()
+
+    return {
+        "user_id": user_id,
+        "maior_id": maior_id
     }
 
 
-# ============================================================
-# START SERVER
-# ============================================================
+@mcp.tool()
+def contar_memorias(user_id: str = "romeu") -> dict:
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT COUNT(*)
+        FROM memory
+        WHERE user_id = %s
+        """,
+        (user_id,)
+    )
+
+    total = cursor.fetchone()[0]
+    cursor.close()
+
+    return {
+        "user_id": user_id,
+        "total": total
+    }    
+
 
 if __name__ == "__main__":
-    logger.info("Makesluke PostgreSQL MCP Server iniciando...")
-
     mcp.run()
