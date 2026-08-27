@@ -1,6 +1,6 @@
 Makesluke Assistant
 📌 Sobre o projeto
-Makesluke é um assistente técnico com memória semântica, desenvolvido para interagir via texto ou voz, armazenar informações relevantes do usuário, editar ou excluir memórias, e responder levando em conta o contexto salvo no banco de dados.
+Makesluke é um modelo para ser usado de base para um assistente técnico com memória semântica, desenvolvido para interagir via texto ou voz, armazenar informações relevantes do usuário, editar ou excluir memórias, e responder levando em conta o contexto salvo no banco de dados.
 
 Ele utiliza:
 
