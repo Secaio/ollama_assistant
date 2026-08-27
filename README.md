@@ -161,23 +161,3 @@ capaz de evoluir com o usuário
 modular e fácil de expandir
 
 pronto para integrar com apps, automações e voz
-
-📞 Suporte / Continuação
-Se quiser:
-
-adicionar edição fuzzy por embedding
-
-criar comando listar memórias
-
-criar comando limpar memória
-integrar com API REST
-
-adicionar interface web
-
-É só pedir.
-
-Se quiser, posso gerar também:
-
-versão em inglês
-
-versão curta e versão para GitHub com badges e imagens
